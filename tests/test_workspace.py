@@ -487,7 +487,7 @@ def test_detected_cli_uses_existing_transport_and_persists_brief(
     workspace = Workspace(tmp_path / "runs/.workspace")
     assert next(c for c in workspace.settings()["clis"] if c["id"] == "codex")["path"] == str(cli)
     project = workspace.create({"name": "CLI project"})
-    selected = str(tmp_path / "registered-tools") if selected_tools else ""
+    selected = str(tmp_path / "registered-tools") if selected_tools else "auto"
     if selected_tools:
         workspace.save_brief(project["id"], brief | {"capability_directory": selected})
     workspace.select_agent(

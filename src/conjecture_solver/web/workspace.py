@@ -1538,6 +1538,17 @@ class Workspace(MachineWorkspace, ProjectCollections):
             )
         return str(Path(selected["path"]).expanduser().resolve())
 
+    def _available_tools(self, *, instrument=None):
+        from .inventory import freeze_available_tools
+
+        paths = [self._instrument_path(instrument)] if instrument else []
+        for card in self.catalogue():
+            paths += [item["path"] for item in [card, *card.get("variants", [])]
+                      if item.get("path")]
+        return freeze_available_tools(
+            paths, self.root / "available-tools" / uuid.uuid4().hex,
+        )
+
     def save_brief(self, identifier, payload):
         brief = {
             k: text(payload, k, allow_list=k in {"success_criteria", "constraints"})
@@ -1564,7 +1575,7 @@ class Workspace(MachineWorkspace, ProjectCollections):
             brief["machine_ids"] = requested_machines
         instrument = text(payload, "instrument", 160)
         if instrument:
-            brief["capability_directory"] = self._instrument_path(instrument)
+            self._instrument_path(instrument)  # Validate the scientific requirement.
             brief["instrument"] = instrument
         if brief["completion_policy"] not in {"answer", "repair"}:
             raise ValueError("Choose answer or repair completion")
@@ -1587,16 +1598,15 @@ class Workspace(MachineWorkspace, ProjectCollections):
                 project.get("continuation_draft") or {}
             ):
                 brief["machine_ids"] = project["continuation_draft"]["machine_ids"]
-            if not instrument:
-                prior = project.get("brief") or project.get("continuation_draft") or {}
-                if "capability_directory" not in payload:
-                    brief["capability_directory"] = prior.get("capability_directory", "")
-                if (
-                    prior.get("instrument")
-                    and brief["capability_directory"]
-                    and brief["capability_directory"] == prior.get("capability_directory")
-                ):
-                    brief["instrument"] = prior["instrument"]
+            prior = project.get("brief") or project.get("continuation_draft") or {}
+            if "capability_directory" not in payload:
+                brief["capability_directory"] = prior.get("capability_directory", "auto")
+            if (
+                not instrument and prior.get("instrument")
+                and brief["capability_directory"]
+                and brief["capability_directory"] == prior.get("capability_directory")
+            ):
+                brief["instrument"] = prior["instrument"]
             if payload.get("inherited_files") is not None:
                 from ..research_continuation import selected_file
 
@@ -1972,8 +1982,13 @@ class Workspace(MachineWorkspace, ProjectCollections):
             capability_directory = (
                 text(payload, "capability_directory", 4096)
                 if "capability_directory" in payload
-                else brief.get("capability_directory")
+                else brief.get("capability_directory", "auto")
             )
+            if capability_directory == "auto":
+                capability_directory = (
+                    self._available_tools(instrument=brief.get("instrument"))
+                    if not brief.get("machine_ids") or brief.get("instrument") else None
+                )
             if brief.get("instrument") and not capability_directory:
                 raise ValueError(
                     "Select tools containing the declared instrument before launching. "
@@ -2065,6 +2080,7 @@ class Workspace(MachineWorkspace, ProjectCollections):
                     max_wall_seconds=brief["hours"] * 3600,
                     max_command_seconds=600,
                     capability_directory=capability_directory,
+                    method_review_scope="used_instruments",
                     execution_backend=payload.get("execution_backend", self.execution["backend"]),
                     machine_registry=str(self.machine_registry.root)
                     if brief.get("machine_ids")
