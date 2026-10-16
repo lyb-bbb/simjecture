@@ -190,7 +190,7 @@ def freeze_available_tools(paths, directory):
             except (OSError, ValueError) as error:
                 skipped.append(dict(path=str(source), reason=str(error)))
     put(directory / "inventory.json", dict(installed=installed, skipped=skipped))
-    return str(registry) if installed else None
+    return str(registry)
 
 
 def automatic_tool_paths():

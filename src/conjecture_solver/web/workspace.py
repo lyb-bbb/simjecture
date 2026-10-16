@@ -1604,7 +1604,6 @@ class Workspace(MachineWorkspace, ProjectCollections):
             if (
                 not instrument and prior.get("instrument")
                 and brief["capability_directory"]
-                and brief["capability_directory"] == prior.get("capability_directory")
             ):
                 brief["instrument"] = prior["instrument"]
             if payload.get("inherited_files") is not None:
@@ -1984,7 +1983,8 @@ class Workspace(MachineWorkspace, ProjectCollections):
                 if "capability_directory" in payload
                 else brief.get("capability_directory", "auto")
             )
-            if capability_directory == "auto":
+            automatic_tools = capability_directory == "auto"
+            if automatic_tools:
                 capability_directory = (
                     self._available_tools(instrument=brief.get("instrument"))
                     if not brief.get("machine_ids") or brief.get("instrument") else None
@@ -2014,7 +2014,7 @@ class Workspace(MachineWorkspace, ProjectCollections):
                         raise ValueError("A different instrument already uses this inventory name")
                     capability_directory = str(inventory)
                 registry = MVPCapabilityRegistry.discover(capability_directory)
-                if not registry.hashes:
+                if not registry.hashes and not automatic_tools:
                     raise ValueError("Selected capability directory contains no instruments")
                 if brief.get("instrument"):
                     required = Path(self._instrument_path(brief["instrument"]))
@@ -2051,6 +2051,12 @@ class Workspace(MachineWorkspace, ProjectCollections):
                 "They are preparation, not accepted evidence. "
                 "Keep conclusions bounded to the agreed question and tested domain."
             )
+            if brief.get("instrument"):
+                instruction += (
+                    f"\nDeclared instrument requirement: {brief['instrument']}. "
+                    "Document its use in answering the question for independent review. "
+                    "Other tools remain available for supporting experiments and analysis."
+                )
             # Freeze before materializing the scientific contract. Keep the snapshot
             # outside research until materialize_native has created the run directory.
             context_staging = self.root / "context-staging" / uuid.uuid4().hex

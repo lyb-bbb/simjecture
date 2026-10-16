@@ -70,12 +70,14 @@ def test_redraft_preserves_direct_descriptor_selection_after_restart(handoff):
     assert restarted.save_brief(project, payload)["capability_directory"] == cards[0]["path"]
 
 
-def test_explicit_selection_can_replace_or_clear_inherited_instrument(handoff):
+def test_access_changes_preserve_the_required_solver_until_explicit_clear(handoff):
     workspace, project, payload, cards = handoff
     workspace.save_brief(project, payload | {"instrument": "flash"})
     replaced = workspace.save_brief(project, payload | {"capability_directory": cards[1]["path"]})
     assert replaced["capability_directory"] == cards[1]["path"]
-    assert "instrument" not in replaced
+    assert replaced["instrument"] == "flash"
+    expanded = workspace.save_brief(project, payload | {"capability_directory": "auto"})
+    assert expanded["instrument"] == "flash"
     cleared = workspace.save_brief(project, payload | {"capability_directory": ""})
     assert cleared["capability_directory"] == ""
     assert workspace.save_brief(project, payload)["capability_directory"] == ""
@@ -155,6 +157,7 @@ def test_redrafted_tool_reaches_frozen_execution_contract(handoff, monkeypatch, 
         installation = MVPCapabilityInstallation.read(card["path"])
         expected[installation.manifest.name] = installation.contract_hash
     assert manifest["capability_hashes"] == expected
+    assert "Declared instrument requirement: flash" in manifest["operator_protocol"]
     assert load(root / "study-launch.json")["request"]["capability_directory"]
     assert load(root / "project-brief.json")["instrument"] == "flash"
     service = ResearchService(root)
@@ -208,14 +211,15 @@ def test_automatic_inventory_is_per_study_and_skips_unavailable_tools(handoff):
         MVPCapabilityRegistry.discover(first, names=("other-fixture",)).get("other-fixture")
 
 
-@pytest.mark.parametrize("remote", [False, True])
-def test_native_automatic_access_is_frozen_on_resume(handoff, monkeypatch, remote):
+@pytest.mark.parametrize("placement", ["local", "remote", "empty"])
+def test_native_automatic_access_is_frozen_on_resume(handoff, monkeypatch, placement):
     from conjecture_solver import execution
     from conjecture_solver.execution_pool import MachineRegistry
     from conjecture_solver.study_launch import NativeStudyRequest, materialize_native
     from conjecture_solver.web import inventory
 
     workspace, _, _, cards = handoff
+    remote = placement == "remote"
     pool = dict(
         registry=str(workspace.root / "machines"),
         workers={"remote": {"profile": {"config": {"max_jobs": 1}}}},
@@ -227,7 +231,7 @@ def test_native_automatic_access_is_frozen_on_resume(handoff, monkeypatch, remot
     ))
     monkeypatch.setattr(inventory, "automatic_tool_paths", lambda: (
         pytest.fail("Remote tools come from the worker pool") if remote
-        else [card["path"] for card in cards]
+        else [card["path"] for card in cards] if placement == "local" else []
     ))
     root = workspace.root.parent / "native-study"
     request = NativeStudyRequest(
@@ -239,9 +243,17 @@ def test_native_automatic_access_is_frozen_on_resume(handoff, monkeypatch, remot
     materialize_native(request)
     manifest = load(root / "research.json")
     assert set(manifest["capability_hashes"]) == (
-        {"flash--at-remote"} if remote else {"flash-fixture", "other-fixture"}
+        {"flash--at-remote"} if remote else
+        {"flash-fixture", "other-fixture"} if placement == "local" else set()
     )
     assert manifest["method_review_scope"] == "used_instruments"
+    if placement == "empty":
+        from conjecture_solver.research_service import ResearchService
+
+        registry = Path(manifest["capabilities"])
+        (registry / "flash.json").symlink_to(cards[0]["path"])
+        service = ResearchService(root)
+        assert service.register_capability("flash-fixture")["runtime_sha256"]
     before = (root / "research.json").read_bytes()
     monkeypatch.setattr(inventory, "automatic_tool_paths", lambda: pytest.fail("Rediscovery"))
     materialize_native(request, resume=True)
