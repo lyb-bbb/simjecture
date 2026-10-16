@@ -535,7 +535,8 @@ def agent_tools(root, deadline, project=None, workspace=None):
                 constraints: Fixed assumptions, allowed changes and required tools or inputs.
                 hours: Requested wall-time budget, between 0.01 and 168 hours.
                 completion_policy: answer accepts a negative result; repair seeks a tested repair.
-                instrument: Installed catalogue tool ID, e.g. warpx-cpu; empty for ordinary Python.
+                instrument: Installed catalogue tool or variant ID, e.g. warpx-cpu.
+                    Select the requested solver; empty preserves an existing tool selection.
                 inherited_files: Parent research-relative paths for a continuation.
                     Omit to preserve the existing selection.
                 machine_ids: Prepared execution worker IDs. Omit to preserve the current selection.
@@ -836,7 +837,14 @@ def run_external(prompt, root, config, turn, workspace=None, *, wall_seconds=Non
         "question must be a text string; success_criteria and constraints may be "
         "text strings or lists of text strings, joined with blank lines on import. "
         "Each text field must fit within 20,000 characters after joining. This prepares "
-        "an editable brief; it does not launch a study. Existing project files are available."
+        "an editable brief; it does not launch a study. Existing project files are available. "
+        "For a study requiring an external solver, inspect the installed tool catalogue "
+        "and include instrument with its installed catalogue tool or variant ID, or "
+        "capability_directory "
+        "with the registered descriptor file/directory. Merely naming a solver in the "
+        "question does not attach it to autonomous execution. Omitted tool fields preserve "
+        "the saved brief's selection; capability_directory set to an empty string explicitly "
+        "selects ordinary Python. Include machine_ids when using prepared remote workers."
     )
     if workspace:
         prompt += (

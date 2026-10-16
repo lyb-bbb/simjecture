@@ -102,6 +102,20 @@ The same format applies to a native agent's `STUDY_BRIEF.json`. Nested objects,
 non-text list items and oversized fields are rejected without replacing the
 saved brief. Importing a brief does not launch research.
 
+Installed Research tools and interactive simulation access do not automatically
+attach a solver to an autonomous study. Select its registered tool in the study
+brief, or supply `instrument` with an installed catalogue tool or variant ID.
+For a registered bundle, set `capability_directory` to its descriptor directory;
+a single descriptor file is also accepted. Native agents use the same fields in
+`STUDY_BRIEF.json`. Use `machine_ids` for prepared remote workers.
+
+Redrafting without tool fields preserves the saved selection, including after a
+restart. An empty `instrument` also preserves it. Explicitly setting
+`capability_directory` to `""` selects ordinary Python; choosing a different path
+replaces the selection. Launch checks that a declared `instrument` is included
+in the selected runtime identities. Mentioning a solver only in the question
+does not declare or attach it. Existing studies retain their frozen tool bindings.
+
 `launch` requires a unique `request_key` and uses the saved
 brief and model configuration, exactly as the browser does. It starts a real
 autonomous run. `stop` stops the interactive turn; study cancellation uses the
